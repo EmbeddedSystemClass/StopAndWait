@@ -24,12 +24,12 @@ void physical_layer_control(){
 	/* Connect to a network layer -> simulated as we are a socket client */
 	ErrorHandler err;
 	int counter;
+	//check_control_layer(control.control_fd, &control, &status);
 	while(1){
 		while (control.initialised == 0){
 			/* Until it is not initialised, try to initilise */
 			/* check if there is something at control layer */
 			/* Used to put the TRX in master or slave */
-			check_control_layer(control.control_fd, &control, &status);
 			printf("Going to initialise the link\n");
 			err = protocol_establishment_routine(initialise_link, &control, &status);
 			if (err == IO_ERROR){

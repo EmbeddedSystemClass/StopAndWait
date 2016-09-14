@@ -27,8 +27,10 @@ ErrorHandler check_control_layer(int fd, Control * c, Status * s){
 	printf("Checking control layer\n");
 	printf("Will choose a random number, then select a master and a slave\n");
 	if (rand()%100 > 50){
+		printf("I will be MASTER!\n");
 		c->master_slave_flag = MASTER;
 	}else{
+		printf("I will be SLAVE!\n");
 		c->master_slave_flag = SLAVE;
 	}
 	return NO_ERROR;
