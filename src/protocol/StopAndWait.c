@@ -23,6 +23,17 @@ static unsigned long long millitime() {
 static ErrorHandler Connect_Master(Control * c, Status * s);
 static ErrorHandler Connect_Slave(Control * c, Status * s);
 
+ErrorHandler check_control_layer(int fd, Control * c, Status * s){
+	printf("Checking control layer\n");
+	printf("Will choose a random number, then select a master and a slave\n");
+	if (rand()%100 > 50){
+		c->master_slave_flag = MASTER;
+	}else{
+		c->master_slave_flag = SLAVE;
+	}
+	return NO_ERROR;
+}
+
 ErrorHandler protocol_control_routine (BYTE * p, Control * c, Status * s) {
 	ErrorHandler ret;
 	/* Routine to send control frames to the other peer */

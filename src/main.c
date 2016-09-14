@@ -29,7 +29,7 @@ void physical_layer_control(){
 			/* Until it is not initialised, try to initilise */
 			/* check if there is something at control layer */
 			/* Used to put the TRX in master or slave */
-			check_control_layer(c->control_fd, c, s);
+			check_control_layer(control.control_fd, &control, &status);
 			printf("Going to initialise the link\n");
 			err = protocol_establishment_routine(initialise_link, &control, &status);
 			if (err == IO_ERROR){

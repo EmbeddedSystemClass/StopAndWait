@@ -12,4 +12,6 @@ ErrorHandler protocol_establishment_routine (ProtocolControlEvent event, Control
 ErrorHandler protocol_control_routine (BYTE * p, Control * c, Status * s);
 ErrorHandler StopAndWait(Control * c, Status * s);
 
+ErrorHandler check_control_layer(int fd, Control * c, Status * s);
+
 #endif
