@@ -202,206 +202,19 @@ static ErrorHandler Connect_Slave(Control * c, Status * s){
 	return NO_ERROR;
 }
 
-ErrorHandler ResendFrame(Control * c, Status * s){
-	printf("Timeout waiting for ACK, resending a frame if waiting for ack\n");
-	if (++s->stored_count == c->packet_counter){
-		printf("Timeout EXPIRED\n");
-		/* Last link updated, round trip time must be updated */
-		/* Every packet sent c->timeout is set */
-		c->round_trip_time = c->packet_timeout_time;
-		c->waiting_ack = false;
-		return NO_ERROR;
-	}
-	s->type = s->stored_type;
-	/* Care!, maybe is not type D */
-	if (write_packet_to_phy(c->phy_fd, s->stored_packet, s->stored_len, c, s) != 0){
-		printf("Error writing\n");
-		return IO_ERROR;
-	}
-	return NO_ERROR;
-}
-
-ErrorHandler SendNetFrame(Control * c, Status * s){
+ErrorHandler StopAndWait(Control * c, Status * s){
 	int len;
-	BYTE buffer[MTU_SIZE + MTU_OVERHEAD];
-	int ret;
-
-	printf("Something at the NET that can be read\n");
-	/* Something in Network Layer -> this has priority when not waiting for ACK */
-	/* Do stop and wait SEND */
-	if (len = read_packet_from_net(c->net_fd, buffer, 0), len < 0){
-		printf("Error reading\n");
-		return IO_ERROR;
-	}
-	if (len > 0){
-		if (len > MTU_SIZE){
-			printf("Maximum MTU reached\n");
-			return IO_ERROR;
-		}
-		/* in ms */
-		s->type = 'D';
-		if (write_packet_to_phy(c->phy_fd, buffer, len, c, s) != 0){
-			printf("Error writing\n");
-			return IO_ERROR;
-		}
-		s->stored_count = 0;
-		s->stored_type = s->type;
-		s->stored_len = len;
-		memcpy(s->stored_packet, buffer, len);
-		c->waiting_ack = true;
-		/* Start the timeout */
-		c->timeout = millitime();
-	}else{
-		printf("NET Socket has been closed: %d\n", ret);							
-		/* End of socket */
-		return IO_ERROR;
-	}
-}
-
-ErrorHandler RecvPhyFrame(Control * c, Status * s){
-	int len;
-	BYTE buffer[MTU_SIZE + MTU_OVERHEAD];
 	int ret;
 	int rv;
 	Status rs;
 	struct pollfd ufds[2];
-
+	BYTE buffer[MTU_SIZE + MTU_OVERHEAD];
+	printf("Print the states: SN: %d RN: %d\n", s->sn, s->rn);
 	ufds[0].fd = c->net_fd;
 	ufds[0].events = POLLIN; // check for normal data
 	ufds[1].fd = c->phy_fd;
 	ufds[1].events = POLLIN; // check for normal data
 
-	printf("Something at the medium that can be read\n");
-	/* Something at the physical layer -> this is second priority */
-	/* Do stop and wait RECV */
-	if (len = read_packet_from_phy(c->phy_fd, buffer, 0, c, &rs), len < 0){
-		printf("Error reading\n");
-		return IO_ERROR;
-	}
-	/* Now is time to check wheter is that */
-	if (rs.type == 'C' && c->master_slave_flag == SLAVE){
-		printf("We are in troubles, master asks for reconnect\n");
-		printf("Waiting flag was: %d\n", c->waiting_ack);
-		c->last_link = 0;
-		/* The packet is lost */
-		return NO_ERROR;
-	}
-	/* This means, a packet ACKing the last sent packet has been received (we have to update the sequence number) */
-	if (rs.rn != s->sn && c->waiting_ack == true){
-		printf("Good packet while waiting for ACK. s->sn updated\n");
-		s->sn = rs.rn;
-		c->waiting_ack = false;
-		/* Last link updated, round trip time must be updated */
-		/* Every packet sent c->timeout is set */
-		c->round_trip_time = (millitime() - c->timeout) + 2 * c->piggy_time;
-		printf("Rount trip time updated to: %d\n", c->round_trip_time);
-		c->last_link = millitime();
-
-		/* A new packet (sent from other station) has been received while witing for ACK */
-		if (rs.sn == s->rn){
-			/* Data or Control */
-			if (rs.type == 'D' || rs.type == 'P'){
-				if (rs.type == 'D'){
-					printf("Sending packet towards the network. Received a piggybacking ACK\n");
-					check_headers_net(buffer, &len);
-					write_to_net(c->net_fd, buffer, len);
-				}else if (rs.type == 'P'){
-					printf("Control Packet arrived-> ");
-					printf("0x%02X 0x%02X\n", buffer[0], buffer[1]);
-				}
-				/* If we are waiting a packet from network, update s->rn and do not send ACK, send a new packet directly */
-				rv = poll(&ufds[0], 1, c->piggy_time);
-				if (rv == -1){
-					perror("poll inside function: ");
-					return IO_ERROR;
-				}else if (rv == 0){
-					s->rn = (s->rn + 1)%2;
-					c->last_link = millitime();
-					write_ack_to_phy(c->phy_fd, c, s);
-					return NO_ERROR;
-				}else{
-					s->rn = (s->rn + 1)%2;
-					c->last_link = millitime();
-					return NO_ERROR;
-				}
-				/* Prevent from going to rs.sn == s->rn from bottom, since we already entered */
-			}
-			return NO_ERROR;
-		}
-	}
-
-	/* A new packet (sent from other station) has been received, we were not waiting for ACK or nothing */
-	if (rs.sn == s->rn){
-		if (c->waiting_ack == false){
-			/* Aquí no entro nunca broh */
-			printf("Received sn == rn and waiting_ack == false\n");
-			if (rs.type == 'D' || rs.type == 'P'){
-				if (rs.type == 'D'){
-					printf("Sending packet towards the network\n");
-					check_headers_net(buffer, &len);
-					write_to_net(c->net_fd, buffer, len);
-				}else if (rs.type == 'P'){
-					printf("Control Packet arrived-> ");
-					printf("0x%02X 0x%02X\n", buffer[0], buffer[1]);
-				}
-				/* If we are waiting a packet from network, update s->rn and do not send ACK, send a new packet directly */
-				rv = poll(&ufds[0], 1, c->piggy_time);
-				if (rv == -1){
-					perror("poll inside function: ");
-					return IO_ERROR;
-				}else if (rv == 0){
-					s->rn = (s->rn + 1)%2;
-					c->last_link = millitime();
-					write_ack_to_phy(c->phy_fd, c, s);
-					return NO_ERROR;
-				}else{
-					s->rn = (s->rn + 1)%2;
-					c->last_link = millitime();
-					return NO_ERROR;
-				}
-			}
-			if (rs.type == 'C'){
-				s->rn = (s->rn + 1)%2;
-				c->last_link = millitime();
-				write_ack_to_phy(c->phy_fd, c, s);
-				return NO_ERROR;
-			}
-		}else{
-			/* A packet received not ACKing my last packet, but I was waiting a packet */
-			printf("Received sn == rn and waiting_ack == true\n");
-			if (rs.type == 'D' || rs.type == 'P'){
-				if (rs.type == 'D'){
-					printf("Sending packet towards the network while waiting for ACK\n");
-					check_headers_net(buffer, &len);
-					write_to_net(c->net_fd, buffer, len);
-				}else if (rs.type == 'P'){
-					printf("Control Packet arrived-> ");
-					printf("0x%02X 0x%02X\n", buffer[0], buffer[1]);
-				}
-				s->rn = (s->rn + 1)%2;
-				c->last_link = millitime();	
-				write_ack_to_phy(c->phy_fd, c, s);
-				return NO_ERROR;
-			}
-		}
-	}else{
-		/* This packet has no sense with the flags */
-		if (rs.type == 'D' || rs.type == 'P' || rs.type == 'C'){
-			write_ack_to_phy(c->phy_fd, c, s);
-			return NO_ERROR;
-		}
-	}
-}
-
-ErrorHandler StopAndWait(Control * c, Status * s){
-	ErrorHandler err;
-	int rv;
-	struct pollfd ufds[2];
-	ufds[0].fd = c->net_fd;
-	ufds[0].events = POLLIN; // check for normal data
-	ufds[1].fd = c->phy_fd;
-	ufds[1].events = POLLIN; // check for normal data
-	
 	if (c->waiting_ack == true){
 		printf("Waiting for a packet from PHY -> do not accept from net\n");
 		rv = poll(&ufds[1], 1, c->round_trip_time);
@@ -415,24 +228,221 @@ ErrorHandler StopAndWait(Control * c, Status * s){
 		return IO_ERROR;
 	}else if(rv == 0){
 		/* Resend Frame */
+
 		/* TODO: MAKE A FUNCTION FOR THAT */
+
 		if (c->waiting_ack == true){
-			return(ResendFrame(c, s));
-		}else{
-			return NO_ERROR;
+			printf("Timeout waiting for ACK, resending a frame if waiting for ack\n");
+			if (++s->stored_count == c->packet_counter){
+				printf("Timeout EXPIRED\n");
+				/* Last link updated, round trip time must be updated */
+				/* Every packet sent c->timeout is set */
+				c->round_trip_time = c->packet_timeout_time;
+				c->waiting_ack = false;
+				return NO_ERROR;
+			}
+			s->type = s->stored_type;
+			/* Care!, maybe is not type D */
+			if (write_packet_to_phy(c->phy_fd, s->stored_packet, s->stored_len, c, s) != 0){
+				printf("Error writing\n");
+				return IO_ERROR;
+			}
 		}
+		return NO_ERROR;
 	}else{
 		/* Check the timeout */
 		if ((ufds[0].revents & POLLIN) && c->waiting_ack == false){
-			err = SendNetFrame(c, s);
-			if (err != NO_ERROR){
-				return err;
+
+			/* TODO: MAKE A FUNCTION FOR THAT */
+
+			printf("Something at the NET that can be read\n");
+			/* Something in Network Layer -> this has priority when not waiting for ACK */
+			/* Do stop and wait SEND */
+			if (len = read_packet_from_net(c->net_fd, buffer, 0), len < 0){
+				printf("Error reading\n");
+				return IO_ERROR;
+			}
+			if (len > 0){
+				if (len > MTU_SIZE){
+					printf("Maximum MTU reached\n");
+					return IO_ERROR;
+				}
+				/* in ms */
+				s->type = 'D';
+				if (write_packet_to_phy(c->phy_fd, buffer, len, c, s) != 0){
+					printf("Error writing\n");
+					return IO_ERROR;
+				}
+				s->stored_count = 0;
+				s->stored_type = s->type;
+				s->stored_len = len;
+				memcpy(s->stored_packet, buffer, len);
+				c->waiting_ack = true;
+				/* Start the timeout */
+				c->timeout = millitime();
+			}else{
+				printf("NET Socket has been closed: %d\n", ret);							
+				/* End of socket */
+				return IO_ERROR;
 			}
 		}
 		/* Something arrived from the medium!! */
 		if (ufds[1].revents & POLLIN){
-			return (RecvPhyFrame(c, s));
+
+			/* TODO: MAKE A FUNCTION FOR THAT */
+
+			printf("Something at the medium that can be read\n");
+			/* Something at the physical layer -> this is second priority */
+			/* Do stop and wait RECV */
+			if (len = read_packet_from_phy(c->phy_fd, buffer, 0, c, &rs), len < 0){
+				printf("Error reading\n");
+				return IO_ERROR;
+			}
+			/* Now is time to check wheter is that */
+			if (rs.type == 'C' && c->master_slave_flag == SLAVE){
+				printf("We are in troubles, master asks for reconnect\n");
+				printf("Waiting flag was: %d\n", c->waiting_ack);
+				c->last_link = 0;
+				/* The packet is lost */
+				return NO_ERROR;
+			}
+			/* This means, a packet ACKing the last sent packet has been received (we have to update the sequence number) */
+			if (rs.rn != s->sn && c->waiting_ack == true){
+				printf("Good packet while waiting for ACK. s->sn updated\n");
+				s->sn = rs.rn;
+				c->waiting_ack = false;
+				/* Last link updated, round trip time must be updated */
+				/* Every packet sent c->timeout is set */
+				c->round_trip_time = (millitime() - c->timeout) + 2 * c->piggy_time;
+				printf("Rount trip time updated to: %d\n", c->round_trip_time);
+				c->last_link = millitime();
+
+				/* A new packet (sent from other station) has been received while witing for ACK */
+				if (rs.sn == s->rn){
+					/* Data or Control */
+					if (rs.type == 'D' || rs.type == 'P'){
+						if (rs.type == 'D'){
+							printf("Sending packet towards the network. Received a piggybacking ACK\n");
+							check_headers_net(buffer, &len);
+							write_to_net(c->net_fd, buffer, len);
+						}else if (rs.type == 'P'){
+							printf("Control Packet arrived-> ");
+							printf("0x%02X 0x%02X\n", buffer[0], buffer[1]);
+						}
+						/* If we are waiting a packet from network, update s->rn and do not send ACK, send a new packet directly */
+						rv = poll(&ufds[0], 1, c->piggy_time);
+						if (rv == -1){
+							perror("poll inside function: ");
+							return IO_ERROR;
+						}else if (rv == 0){
+							s->rn = (s->rn + 1)%2;
+							c->last_link = millitime();
+							write_ack_to_phy(c->phy_fd, c, s);
+							return NO_ERROR;
+						}else{
+							s->rn = (s->rn + 1)%2;
+							c->last_link = millitime();
+							return NO_ERROR;
+						}
+						/* Prevent from going to rs.sn == s->rn from bottom, since we already entered */
+					}
+					return NO_ERROR;
+				}
+			}
+
+			/* A new packet (sent from other station) has been received, we were not waiting for ACK or nothing */
+			if (rs.sn == s->rn){
+				if (c->waiting_ack == false){
+					/* Aquí no entro nunca broh */
+					printf("Received sn == rn and waiting_ack == false\n");
+					if (rs.type == 'D' || rs.type == 'P'){
+						if (rs.type == 'D'){
+							printf("Sending packet towards the network\n");
+							check_headers_net(buffer, &len);
+							write_to_net(c->net_fd, buffer, len);
+						}else if (rs.type == 'P'){
+							printf("Control Packet arrived-> ");
+							printf("0x%02X 0x%02X\n", buffer[0], buffer[1]);
+						}
+						/* If we are waiting a packet from network, update s->rn and do not send ACK, send a new packet directly */
+						rv = poll(&ufds[0], 1, c->piggy_time);
+						if (rv == -1){
+							perror("poll inside function: ");
+							return IO_ERROR;
+						}else if (rv == 0){
+							s->rn = (s->rn + 1)%2;
+							c->last_link = millitime();
+							write_ack_to_phy(c->phy_fd, c, s);
+							return NO_ERROR;
+						}else{
+							s->rn = (s->rn + 1)%2;
+							c->last_link = millitime();
+							return NO_ERROR;
+						}
+					}
+					if (rs.type == 'C'){
+						s->rn = (s->rn + 1)%2;
+						c->last_link = millitime();
+						write_ack_to_phy(c->phy_fd, c, s);
+						return NO_ERROR;
+					}
+				}else{
+					
+					/* A packet received not ACKing my last packet, but I was waiting a packet */
+					printf("Received sn == rn and waiting_ack == true\n");
+					if (rs.type == 'D' || rs.type == 'P'){
+						if (rs.type == 'D'){
+							printf("Sending packet towards the network while waiting for ACK\n");
+							check_headers_net(buffer, &len);
+							write_to_net(c->net_fd, buffer, len);
+						}else if (rs.type == 'P'){
+							printf("Control Packet arrived-> ");
+							printf("0x%02X 0x%02X\n", buffer[0], buffer[1]);
+						}
+						s->rn = (s->rn + 1)%2;
+						c->last_link = millitime();	
+						write_ack_to_phy(c->phy_fd, c, s);
+						return NO_ERROR;
+					}
+				}
+			}else{
+				/* This packet has no sense with the flags */
+				printf("What is that?\n");
+				if (rs.type == 'D' || rs.type == 'P' || rs.type == 'C'){
+					write_ack_to_phy(c->phy_fd, c, s);
+					return NO_ERROR;
+				}
+			}
+			/* This cannot be a corrupted frame */
 		}
+		/* commenting this, i whink is not useful */
+		#if 0
+		else{
+			/* In case we are here --> I.E. No packet received from PHY but waiting for ACK */
+			if (c->waiting_ack == true){
+				/* update timeout variable */
+				if ((millitime() - c->timeout) >= c->packet_timeout_time){
+					/* Resend Frame */
+					printf("Timeout waiting for ACK but something triggered us\n");	
+					s->stored_type = s->type;
+					if (++s->stored_count == c->packet_counter){
+						c->waiting_ack = false;
+						c->round_trip_time = c->packet_timeout_time;
+						printf("Timeout EXPIRED\n");
+						return NO_ERROR;
+					}
+					if (write_packet_to_phy(c->phy_fd, s->stored_packet, s->stored_len, c, s) != 0){
+						printf("Error writing\n");
+						return IO_ERROR;
+					}
+					c->waiting_ack = true;	
+					/* Start the timeout */
+					c->timeout = millitime();		
+					return NO_ERROR;
+				}
+			}
+		}
+		#endif
 	}
 	return NO_ERROR;
 }
