@@ -20,6 +20,8 @@
 #include "pi_cc_spi.h"
 #include "pi_cc_cc1100-cc2500.h"
 
+#define OLD_VERSION
+
 char *state_names[] = {
     "SLEEP",            // 00
     "IDLE",             // 01
@@ -1147,7 +1149,7 @@ uint32_t radio_receive_packet(spi_parms_t *spi_parms, arguments_t *arguments, ui
 {
     uint8_t  crc, block_countdown, block_count = 0;
     uint32_t packet_size = 0;
-    uint32_t timeout, timeout_value = (arguments->packet_length < 32 ? 16 : arguments->packet_length / 2); // timeout value in bocks of 4 2-FSK bytes
+    uint32_t timeout, timeout_value = (arguments->packet_length < 32 ? 16 : arguments->packet_length); // timeout value in bocks of 4 2-FSK bytes
 
     if (blocks_received == radio_int_data.packet_rx_count) // no block received
     {
@@ -1171,13 +1173,13 @@ uint32_t radio_receive_packet(spi_parms_t *spi_parms, arguments_t *arguments, ui
             if (block_count != block_countdown)
             {
                 verbprintf(1, "RADIO: block sequence error, aborting packet\n");
-                return 0;
+                return -1;
             }
 
             if (!crc)
             {
                 verbprintf(1, "RADIO: CRC error, aborting packet\n");
-                return 0;
+                return -2;
             }
 
             timeout = timeout_value;
@@ -1192,7 +1194,7 @@ uint32_t radio_receive_packet(spi_parms_t *spi_parms, arguments_t *arguments, ui
             if (!timeout)
             {
                 verbprintf(1, "RADIO: timeout waiting for the next block, aborting packet\n");
-                return 0;
+                return -3;
             }
 
         } while (block_countdown > 0);

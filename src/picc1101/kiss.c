@@ -180,6 +180,8 @@ uint8_t kiss_command(uint8_t *block)
     return 1;
 }
 
+#define OLD_VERSION
+
 // ------------------------------------------------------------------------------------------------
 // Run the KISS virtual TNC
 void kiss_run(serial_t *serial_parms, spi_parms_t *spi_parms, arguments_t *arguments)
@@ -288,6 +290,13 @@ void kiss_run(serial_t *serial_parms, spi_parms_t *spi_parms, arguments_t *argum
 
             radio_init_rx(spi_parms, arguments); // Init for new packet to receive
             rtx_toggle = 0;
+        }else if (byte_count < 0){
+            /* Just some error happened, free all */
+            radio_wait_free();            // Make sure no radio operation is in progress
+            radio_turn_idle(spi_parms);   // Inhibit radio operations (should be superfluous since both Tx and Rx turn to IDLE after a packet has been processed)
+            radio_flush_fifos(spi_parms); // Flush result of any Rx activity
+            radio_init_rx(spi_parms, arguments); // Init for new packet to receive Rx
+            radio_turn_rx(spi_parms);    
         }
 
         byte_count = read_serial(serial_parms, &tx_buffer[tx_count], bufsize - tx_count);
