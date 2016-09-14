@@ -1207,7 +1207,7 @@ uint32_t radio_receive_packet(spi_parms_t *spi_parms, arguments_t *arguments, ui
 
 // ------------------------------------------------------------------------------------------------
 // Transmission of a block
-void radio_send_block(spi_parms_t *spi_parms)
+void radio_send_block(spi_parms_t *spi_parms, int block_countdown)
 // ------------------------------------------------------------------------------------------------
 {
     uint8_t  initial_tx_count; // Number of bytes to send in first batch
