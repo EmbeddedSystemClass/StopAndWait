@@ -105,10 +105,13 @@ ErrorHandler protocol_establishment_routine (ProtocolControlEvent event, Control
 				if (((int) (millitime() - c->last_link )) >= c->ping_link_time){
 					/* Still not death but in ping time */
 					/* Make a control frame send */
-					ret = protocol_control_routine(NULL, c, s);
-					if (ret == IO_ERROR){
-						printf("Error at protocol control: %d\n", ret);
-						return ret;
+					if (c->master_slave_flag == MASTER){
+						/* Here a control exchange will take place from MASTER -> which is the ground station */
+						ret = protocol_control_routine(NULL, c, s);
+						if (ret == IO_ERROR){
+							printf("Error at protocol control: %d\n", ret);
+							return ret;
+						}
 					}
 				}
 			}else if ( ((int) (millitime() - c->last_link )) >= c->death_link_time){
