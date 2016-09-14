@@ -408,6 +408,14 @@ ErrorHandler StopAndWait(Control * c, Status * s){
 	}
 	if (ufds[2].revents & POLLIN){
 		printf("We have an event at control layer\n");
+		BYTE command[256];
+		ret = read(c->control_fd, command, 256);
+		if (ret > 0){
+			command[ret] = '\0';
+			printf("Command found at control layer: %s\n", command);
+		}else{
+			return IO_ERROR;
+		}
 	}
 	return NO_ERROR;
 }
