@@ -34,6 +34,7 @@ typedef struct Control{
 	MSFLAG 					master_slave_flag;		
 	int 					net_fd;
 	int 					phy_fd;
+	int  					control_fd;
 	bool 					waiting_ack;			/* true or false */
 	unsigned long long 		timeout; 				/* in ms */
 	unsigned long long 		last_link;				/* last connection timestamp (epoch in milliseconds) */

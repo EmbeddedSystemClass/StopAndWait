@@ -27,6 +27,7 @@ void physical_layer_control(){
 	while(1){
 		while (control.initialised == 0){
 			/* Until it is not initialised, try to initilise */
+			/* check if there is something at control layer */
 			printf("Going to initialise the link\n");
 			err = protocol_establishment_routine(initialise_link, &control, &status);
 			if (err == IO_ERROR){
@@ -43,6 +44,7 @@ void physical_layer_control(){
 		}
 		counter = 0;
 		while (control.initialised == 1){
+			/* checking control layer is done inside */
 			err = StopAndWait(&control, &status);
 			if (err != NO_ERROR){
 				printf("Error at S&W protocol: %d\n", err);
@@ -53,21 +55,11 @@ void physical_layer_control(){
 				printf("Error at protocol control: %d\n", err);
 				return;
 			}
-			/* basically, we will try to send a control frame every 10 times we are here */
-			/*counter++;
-			if (counter == 10){
-				counter = 0;
-				err = protocol_control_routine(NULL, &control, &status);
-				if (err == IO_ERROR){
-					printf("Error at protocol control: %d\n", err);
-					return;
-				}
-			}*/
 		}
 	}
 }
 
-int protocol_routine(char * sock_data_phy, char * sock_data_net, char * ip){
+int protocol_routine(char * sock_data_phy, char * sock_data_net, char * ip, char * sock_control){
 	char syscall[256];
 	while (1){
 		printf("Connect sockets\n");
@@ -92,6 +84,9 @@ int protocol_routine(char * sock_data_phy, char * sock_data_net, char * ip){
 			perror("Opening netfd: ");
 			exit(-1);
 		}
+
+		control.control_fd = initialise_server_socket(sock_control);
+
 		control.initialised = 0;
 		control.packet_counter = 3;
 		control.ping_link_time = 5000;
@@ -99,26 +94,31 @@ int protocol_routine(char * sock_data_phy, char * sock_data_net, char * ip){
 		control.packet_timeout_time = 500; /* ms */ /* The channel has a delay of 10 ms, so 100 ms per timeout as an example */
 		control.round_trip_time = control.packet_timeout_time;
 		control.death_link_time = 10000; /* in ms */ /* after 10 seconds without handshake, test again */
-		printf("The two socket are initialised\n");
+
+		printf("The three socket are initialised\n");
+
 		physical_layer_control();
+
 		close(control.phy_fd);
 		close(control.net_fd);
+		close(control.control_fd);
+
 	}	
 	return 0;
 }
 
 int main (int argc, char ** argv) {
-	if (argc != 5){
+	if (argc != 6){
 		exit(-1);
 	}
-	if (strcmp("master", argv[4]) == 0){
+	if (strcmp("master", argv[5]) == 0){
 		control.master_slave_flag = MASTER;
-	}else if (strcmp("slave", argv[4]) == 0){
+	}else if (strcmp("slave", argv[5]) == 0){
 		control.master_slave_flag = SLAVE;
 	}else{
 		exit(-1);
 	}
-	return (protocol_routine(argv[1], argv[2], argv[3]));
+	return (protocol_routine(argv[1], argv[2], argv[3], argv[4]));
 }
 
 
