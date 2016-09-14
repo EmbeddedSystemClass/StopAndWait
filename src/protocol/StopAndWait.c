@@ -246,6 +246,7 @@ ErrorHandler StopAndWait(Control * c, Status * s){
 				printf("Error writing\n");
 				return IO_ERROR;
 			}
+			c->timeout = millitime();
 		}
 		return NO_ERROR;
 	}else{
@@ -292,8 +293,8 @@ ErrorHandler StopAndWait(Control * c, Status * s){
 				return IO_ERROR;
 			}
 			/* Now is time to check wheter is that */
-			if (rs.type == 'C' && c->master_slave_flag == SLAVE){
-				printf("We are in troubles, master asks for reconnect\n");
+			if (rs.type == 'C'){
+				printf("We are in troubles, asking for reconnect\n");
 				printf("Waiting flag was: %d\n", c->waiting_ack);
 				c->last_link = 0;
 				/* The packet is lost */

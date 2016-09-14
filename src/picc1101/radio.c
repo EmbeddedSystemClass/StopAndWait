@@ -855,6 +855,8 @@ int init_radio(radio_parms_t *radio_parms, spi_parms_t *spi_parms, arguments_t *
     //   and for power ramp-up/ramp-down at the start/end of transmission in all TX modulation formats.
     PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_FREND0,   0x10); // Front end RX configuration.
 
+    PI_CC_SPIWriteReg(spi_parms, PI_CCxxx0_PATABLE, 0x26); //PATABLE VALUE TO 26 -> -10DBM OUTPUT POWER
+    
     // FSCAL3: Frequency Synthesizer Calibration
     // o bits 7:6: The value to write in this field before calibration is given by the SmartRF
     //   Studio software.

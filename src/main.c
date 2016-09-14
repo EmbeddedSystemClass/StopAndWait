@@ -28,6 +28,8 @@ void physical_layer_control(){
 		while (control.initialised == 0){
 			/* Until it is not initialised, try to initilise */
 			/* check if there is something at control layer */
+			/* Used to put the TRX in master or slave */
+			check_control_layer(c->control_fd, c, s);
 			printf("Going to initialise the link\n");
 			err = protocol_establishment_routine(initialise_link, &control, &status);
 			if (err == IO_ERROR){
@@ -90,7 +92,8 @@ int protocol_routine(char * sock_data_phy, char * sock_data_net, char * ip, char
 		control.initialised = 0;
 		control.packet_counter = 3;
 		control.ping_link_time = 5000;
-		control.piggy_time = 50;
+		control.piggy_time = 20;
+		/* init value of packet timeout time */
 		control.packet_timeout_time = 500; /* ms */ /* The channel has a delay of 10 ms, so 100 ms per timeout as an example */
 		control.round_trip_time = control.packet_timeout_time;
 		control.death_link_time = 10000; /* in ms */ /* after 10 seconds without handshake, test again */
