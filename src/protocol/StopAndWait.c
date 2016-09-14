@@ -306,7 +306,7 @@ ErrorHandler StopAndWait(Control * c, Status * s){
 				return IO_ERROR;
 			}
 			/* Now is time to check wheter is that */
-			if (rs.type == 'C'){
+			if (rs.type == 'C' && c->master_slave_flag == SLAVE){
 				printf("We are in troubles, asking for reconnect\n");
 				printf("Waiting flag was: %d\n", c->waiting_ack);
 				c->last_link = 0;
@@ -385,12 +385,6 @@ ErrorHandler StopAndWait(Control * c, Status * s){
 							c->last_link = millitime();
 							return NO_ERROR;
 						}
-					}
-					if (rs.type == 'C'){
-						s->rn = (s->rn + 1)%2;
-						c->last_link = millitime();
-						write_ack_to_phy(c->phy_fd, c, s);
-						return NO_ERROR;
 					}
 				}else{
 					/* A packet received not ACKing my last packet, but I was waiting a packet */
